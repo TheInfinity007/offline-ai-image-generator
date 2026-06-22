@@ -1,10 +1,14 @@
 {
   "name": "offline-ai-image-generator",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Minimalistic local image generator UI and server",
+  "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "build:css": "tailwindcss -i src/input.css -o public/style.css --minify",
+    "watch:css": "tailwindcss -i src/input.css -o public/style.css --watch",
+    "dev": "concurrently \"npm run watch:css\" \"node server.js\""
   },
   "repository": {
     "type": "git",
@@ -20,8 +24,13 @@
   "homepage": "https://github.com/TheInfinity007/offline-ai-image-generator#readme",
   "dependencies": {
     "@qvac/sdk": "^0.13.5",
-    "concurrently": "^10.0.3",
     "express": "^5.2.1",
     "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "autoprefixer": "^10.5.0",
+    "concurrently": "^10.0.3",
+    "postcss": "^8.5.15",
+    "tailwindcss": "^4.3.1"
   }
 }
