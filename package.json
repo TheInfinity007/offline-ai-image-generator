@@ -1,0 +1,27 @@
+{
+  "name": "offline-ai-image-generator",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TheInfinity007/offline-ai-image-generator.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/TheInfinity007/offline-ai-image-generator/issues"
+  },
+  "homepage": "https://github.com/TheInfinity007/offline-ai-image-generator#readme",
+  "dependencies": {
+    "@qvac/sdk": "^0.13.5",
+    "concurrently": "^10.0.3",
+    "express": "^5.2.1",
+    "socket.io": "^4.8.3"
+  }
+}
