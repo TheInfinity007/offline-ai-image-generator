@@ -2,9 +2,12 @@ import express from 'express'
 import path from 'path'
 import http from 'http'
 import { Server } from 'socket.io'
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 import { loadModel, unloadModel, getLoadedModelInfo, diffusion, SD_V2_1_1B_Q8_0 } from '@qvac/sdk'
+
+import { EVENT } from './src/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,11 +21,121 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+const CONFIG_PATH = path.join(__dirname, '.device-preference.json');
+
+const getPreferredDevice = () => {
+    try {
+        if (fs.existsSync(CONFIG_PATH)) {
+            const data = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf-8'));
+            return data.device || null;
+        }
+    } catch (err) {
+        console.error('Failed to read device preferences:', err.message);
+    }
+    return null;
+}
+
+const setPreferredDevice = (device) => {
+    try {
+        fs.writeFileSync(CONFIG_PATH, JSON.stringify({ device }), 'utf-8')
+    } catch (err) {
+        console.error('Failed to write device preference:', err.message);
+    }
+}
+
+// Global model state
+let loadedModelId = process.modelId || null;
+let modelLoadPercent = 0;
+let modelLoadStatus = 'Awaiting trigger...';
+let isModelLoading = false;
+
+const modelSize = (SD_V2_1_1B_Q8_0.expectedSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+
+const broadcastModelProgress = (percent, status) => {
+    io.emit(EVENT.MODEL_DOWNLOAD_PROGRESS, { percent, status, size: modelSize })
+}
+
 io.on('connection', (socket) => {
     console.log('Client connected:', socket.id);
 
     socket.on('disconnect', () => {
         console.log('Client disconnected:', socket.id);
+    })
+
+    // Trigger model download
+    socket.on(EVENT.TRIGGER_MODEL_DOWNLOAD, async () => {
+
+        console.log("Event listened", EVENT.TRIGGER_MODEL_DOWNLOAD)
+
+        // If already loaded, verify it's still alive in the worker
+        if (loadedModelId) {
+            try {
+                await getLoadedModelInfo({ modelId: loadedModelId });
+                socket.emit(EVENT.MODEL_DOWNLOAD_PROGRESS, {
+                    percent: 100,
+                    status: 'Model fully loaded locally.',
+                    size: modelSize
+                });
+                return;
+            } catch (err) {
+                console.log('Model ID was stale/not found, resetting state and reloading...', err.message);
+                loadedModelId = null;
+                process.modelId = null;
+            }
+        } else {
+            console.log('No loadedModelId present')
+        }
+
+        // If currently loading, report current progress
+        if (isModelLoading) {
+            console.log('Model is currently loading, emitting the event model-download-progress')
+            socket.emit(EVENT.MODEL_DOWNLOAD_PROGRESS, {
+                percent: Math.round(modelLoadPercent),
+                status: modelLoadStatus,
+                size: modelSize
+            })
+            return;
+        }
+
+        isModelLoading = true;
+        modelLoadPercent = 0;
+        modelLoadStatus = 'Initiating model download...';
+        broadcastModelProgress(modelLoadPercent, modelLoadStatus)
+
+        try {
+            console.log('Starting model download...');
+            const preferredDevice = getPreferredDevice();
+            const loadConfig = { prediction: "v" };
+            if (preferredDevice) {
+                loadConfig.device = preferredDevice;
+                if (preferredDevice === "cpu") {
+                    loadConfig.threads = 4;
+                }
+                console.log(`Using cached device preference: ${preferredDevice}`);
+            }
+
+            loadedModelId = await loadModel({
+                modelSrc: SD_V2_1_1B_Q8_0,
+                modelType: 'sdcpp-generation',
+                modelConfig: loadConfig,
+                onProgress: (p) => {
+                    modelLoadPercent = p.percentage;
+                    modelLoadStatus = p.percentage >= 100 ? 'Model fully loaded locally.' : `Downloading model weights... (${p.percentage.toFixed(1)}%)`
+                    broadcastModelProgress(Math.round(modelLoadPercent), modelLoadStatus)
+                }
+            });
+            process.modelId = loadedModelId;
+            isModelLoading = false;
+            console.log("Model loaded successfully. ID:", loadedModelId);
+        } catch (err) {
+            isModelLoading = false;
+            modelLoadPercent = 0;
+            modelLoadStatus = 'Failed to load model: ' + err.message;
+            console.error('Failed to load model:', err);
+            broadcastModelProgress(modelLoadPercent, modelLoadStatus);
+            socket.emit('error_event', { message: 'Failed to load model: ' + err.message });
+        }
+
     })
 });
 
@@ -39,7 +152,7 @@ server.listen(PORT, () => {
 async function handleCleanup() {
     const modelId = process.modelId || loadedModelId;
 
-    /*
+
     if (modelId && modelId !== 'mock-model-id') {
         console.log(`\nUnloading model ID ${modelId} before closing server...`);
         try {
@@ -54,7 +167,7 @@ async function handleCleanup() {
         }
     }
 
-    */
+
     process.exit(0);
 }
 
