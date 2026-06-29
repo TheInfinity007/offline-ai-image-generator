@@ -133,7 +133,7 @@ io.on('connection', (socket) => {
             modelLoadStatus = 'Failed to load model: ' + err.message;
             console.error('Failed to load model:', err);
             broadcastModelProgress(modelLoadPercent, modelLoadStatus);
-            socket.emit('error_event', { message: 'Failed to load model: ' + err.message });
+            socket.emit(EVENT.ERROR_EVENT, { message: 'Failed to load model: ' + err.message });
         }
 
     })
@@ -149,9 +149,10 @@ server.listen(PORT, () => {
 })
 
 // Clean exit handler to unload the model when the server terminates
-async function handleCleanup() {
+const handleCleanup = async () => {
     const modelId = process.modelId || loadedModelId;
 
+    console.log(`Handle cleanUp called, modelId`, modelId);
 
     if (modelId && modelId !== 'mock-model-id') {
         console.log(`\nUnloading model ID ${modelId} before closing server...`);
@@ -159,6 +160,7 @@ async function handleCleanup() {
             await unloadModel({ modelId, clearStorage: false });
             console.log('Model unloaded successfully.');
         } catch (err) {
+            console.log(`Error in unloading model, err:`, err.message);
             if (err.name === 'MODEL_NOT_LOADED' || (err.message && err.message.includes('not loaded'))) {
                 console.log('Model was already unloaded.');
             } else {
@@ -166,8 +168,6 @@ async function handleCleanup() {
             }
         }
     }
-
-
     process.exit(0);
 }
 
