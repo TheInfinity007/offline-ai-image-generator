@@ -137,6 +137,83 @@ io.on('connection', (socket) => {
             socket.emit(EVENT.ERROR_EVENT, { message: 'Failed to load model: ' + err.message });
         }
 
+    });
+
+
+    socket.on(EVENT.GENERATE, async (data) => {
+        console.log(`Receive event ${EVENT.GENERATE}`)
+        const { prompt, ratio } = data;
+
+        if (!prompt || prompt.trim() === '') {
+            socket.emit('error_event', { message: 'Prompt is required' });
+            return;
+        }
+
+        if (!loadedModelId) {
+            socket.emit(EVENT.ERROR_EVENT, { message: 'Model is not loaded yet' });
+            return;
+        }
+
+        const runDiffusion = async (modelIdToUse) => {
+            socket.emit('progress', {
+                percent: 0,
+                status: 'Starting diffusion process...',
+                sub: "DIFFUSION INITITALIZING"
+            });
+
+            console.log(`Generating image for prompt: "${prompt}" with ratio: ${ratio} using model ID: ${modelIdToUse}`);
+
+            const { progressStream, outputs, stats } = diffusion({ modelId: modelIdToUse, prompt })
+
+            // Stream progress steps
+            for await (const { step, totalSteps } of progressStream) {
+                const percent = Math.round((step / totalSteps) * 100);
+                socket.emit(EVENT.PROGRESS, {
+                    percent,
+                    status: `Denoising step ${step}/${totalSteps}...`,
+                    sub: 'RUNNING DIFFUSION'
+                });
+            }
+
+            // Resolve output buffers
+            const buffers = await outputs;
+            if (!buffers || !buffers.length) {
+                throw new Error('No image buffer returned from diffusion model.');
+            }
+
+            // Convert image buffer to a base64 Data URL instead of saving to disk
+            const base64Data = Buffer.from(buffers[0]).toString('base64');
+            const dataUrl = `data:image/png;base64,${base64Data}`;
+
+            // Emit success
+            socket.emit(EVENT.SUCCESS, {
+                url: dataUrl,
+                prompt,
+                seed: (await stats).seed || -1
+            });
+
+            console.log(`Image generated and emitted successfully as base64 Data URL.`);
+        }
+
+        try {
+            await runDiffusion(loadedModelId);
+        } catch (err) {
+            console.error('Image generation failed:', err);
+
+            const isCrash = err.code === 50205 || (err.message.includes('WORKER_CRASHED'));
+
+            if (isCrash) {
+                console.log('Worker crashed during GPU execution.');
+                socket.emit('error_event', { message: 'Image generation failed due to worker crash: ' + err.message });
+            } else {
+                if (err.message.includes('MODEL_NOT_FOUND') || err.message.includes('not found')) {
+                    loadedModelId = null;
+                    process.modelId = null;
+                    broadcastModelProgress(0, 'Model state lost. Please re-trigger download.');
+                }
+                socket.emit('error_event', { message: 'Image generation failed: ' + err.message });
+            }
+        }
     })
 });
 

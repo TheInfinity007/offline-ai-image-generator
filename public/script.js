@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptInput = document.getElementById('prompt-input');
     const sizeBtns = document.querySelectorAll('.size-btn');
     const generateBtn = document.getElementById('generate-btn');
-    const controlsBar = document.getElementById('controls-bar'); const downloadBtn = document.getElementById('download-btn');
+    const controlsBar = document.getElementById('controls-bar');
     const downloadBtn = document.getElementById('download-btn');
 
     const canvasWrapper = document.getElementById('canvas-wrapper');
@@ -141,16 +141,10 @@ document.addEventListener('DOMContentLoaded', () => {
         loaderPercent.textContent = '0%';
         loaderStatus.textContent = 'Sending request...';
         loaderSub.textContent = 'CONNECTING';
+
+        // Emit socket request with ratio parameter
+        socket.emit('generate', { prompt, ratio: selectedRatio });
     });
-
-    // Listen to WebSocket progress reports
-    socket.emit('progress', (data) => {
-        const { percent, status, sub } = data;
-
-        loaderPercent.textContent = `${percent}%`;
-        loaderStatus.textContent = status;
-        loaderSub.textContent = sub;
-    })
 
     // Listen to WebSocket progress reports
     socket.on('progress', (data) => {
