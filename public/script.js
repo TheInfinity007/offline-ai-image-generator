@@ -12,14 +12,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const promptInput = document.getElementById('prompt-input');
     const sizeBtns = document.querySelectorAll('.size-btn');
     const generateBtn = document.getElementById('generate-btn');
+    const controlsBar = document.getElementById('controls-bar'); const downloadBtn = document.getElementById('download-btn');
+    const downloadBtn = document.getElementById('download-btn');
 
     const canvasWrapper = document.getElementById('canvas-wrapper');
     const canvasPlaceholder = document.getElementById('canvas-placeholder');
     const canvasAspectHint = document.getElementById('canvas-aspect-hint');
     const canvasLoader = document.getElementById('canvas-loader');
+    const outputImage = document.getElementById('output-image');
+
+    const loaderPercent = document.getElementById('loader-percent');
+    const loaderStatus = document.getElementById('loader-status');
+    const loaderSub = document.getElementById('loader-sub');
 
     // State: selectedRatio is null initially (enforcing explict selection)
-    let selectedRadio = null;
+    let selectedRatio = null;
     let activeGenerating = false;
     let modelLoaded = false;
 
@@ -88,6 +95,91 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     });
+
+    // Trigger generation
+    generateBtn.addEventListener('click', () => {
+        if (!modelLoaded) return;
+
+        const prompt = promptInput.value.trim();
+        let hasError = false;
+
+        // Validate prompt presence
+        if (!prompt) {
+            promptInput.classList.add('border-destructive');
+            promptInput.focus();
+            setTimeout(() => promptInput.classList.remove('border-destructive'), 1000);
+            hasError = true;
+        }
+
+        // Enforce selection of aspect ratio before generating
+        if (!selectedRatio) {
+            const sizeContainer = document.getElementById('size-selector-container');
+            if (sizeContainer) {
+                sizeContainer.classList.add('border-destructive', 'bg-destructive/5');
+                // Visual shake animation effect
+                sizeContainer.classList.add('animate-shake');
+                setTimeout(() => {
+                    sizeContainer.classList.remove('animate-shake');
+                }, 500);
+            }
+            hasError = true;
+        }
+
+        if (hasError) return;
+        if (activeGenerating) return;
+
+        // Loading State UI
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fa-solid fa-circle-notch animate-spin mr-2"></i> Generating...';
+
+        canvasPlaceholder.classList.add('hidden');
+        outputImage.classList.add('hidden');
+        canvasLoader.classList.remove('hidden');
+        controlsBar.classList.add('hidden');
+
+        // Reset progress labels
+        loaderPercent.textContent = '0%';
+        loaderStatus.textContent = 'Sending request...';
+        loaderSub.textContent = 'CONNECTING';
+    });
+
+    // Listen to WebSocket progress reports
+    socket.emit('progress', (data) => {
+        const { percent, status, sub } = data;
+
+        loaderPercent.textContent = `${percent}%`;
+        loaderStatus.textContent = status;
+        loaderSub.textContent = sub;
+    })
+
+    // Listen to WebSocket progress reports
+    socket.on('progress', (data) => {
+        const { percent, status, sub } = data;
+        loaderPercent.textContent = `${percent}%`;
+        loaderStatus.textContent = status;
+        loaderSub.textContent = sub;
+    });
+
+    // Listen to success event
+    socket.on('success', (data) => {
+        const { url } = data;
+
+        outputImage.src = url;
+        downloadBtn.href = url;
+
+        outputImage.onload = () => {
+            canvasLoader.classList.add('hidden');
+            outputImage.classList.remove('hidden');
+            controlsBar.classList.remove('hidden');
+
+            setTimeout(() => {
+                outputImage.style.opacity = '1';
+            }, 50);
+
+            resetButtonState();
+        };
+    });
+
 
     // Listen to Error Event
     socket.on('error_event', (data) => {

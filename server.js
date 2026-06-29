@@ -154,6 +154,8 @@ const handleCleanup = async (signal) => {
     console.log("Received signal:", signal);
 
 
+    await new Promise(resolve => server.close(resolve));
+
     const modelId = process.modelId || loadedModelId;
 
     console.log(`Handle cleanUp called, modelId`, modelId);
