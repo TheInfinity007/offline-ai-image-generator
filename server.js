@@ -5,9 +5,9 @@ import { Server } from 'socket.io'
 import fs from 'fs';
 import { fileURLToPath } from 'url';
 
-import { loadModel, unloadModel, getLoadedModelInfo, diffusion, SD_V2_1_1B_Q8_0 } from '@qvac/sdk'
+import { loadModel, unloadModel, getLoadedModelInfo, diffusion, SDXL_BASE_1_0_3B_Q8_0 } from '@qvac/sdk'
 
-import { EVENT } from './src/constants.js';
+import { EVENT, DIFFUSION } from './src/constants.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,7 +49,8 @@ let modelLoadPercent = 0;
 let modelLoadStatus = 'Awaiting trigger...';
 let isModelLoading = false;
 
-const modelSize = (SD_V2_1_1B_Q8_0.expectedSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+const model = SDXL_BASE_1_0_3B_Q8_0;
+const modelSize = (model.expectedSize / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
 
 const broadcastModelProgress = (percent, status) => {
     io.emit(EVENT.MODEL_DOWNLOAD_PROGRESS, { percent, status, size: modelSize })
@@ -70,6 +71,7 @@ io.on('connection', (socket) => {
         // If already loaded, verify it's still alive in the worker
         if (loadedModelId) {
             try {
+                console.log("Calling getLoadedModelInfo")
                 await getLoadedModelInfo({ modelId: loadedModelId });
                 socket.emit(EVENT.MODEL_DOWNLOAD_PROGRESS, {
                     percent: 100,
@@ -116,7 +118,7 @@ io.on('connection', (socket) => {
             }
 
             loadedModelId = await loadModel({
-                modelSrc: SD_V2_1_1B_Q8_0,
+                modelSrc: model,
                 modelType: 'sdcpp-generation',
                 modelConfig: loadConfig,
                 onProgress: (p) => {
@@ -163,7 +165,12 @@ io.on('connection', (socket) => {
 
             console.log(`Generating image for prompt: "${prompt}" with ratio: ${ratio} using model ID: ${modelIdToUse}`);
 
-            const { progressStream, outputs, stats } = diffusion({ modelId: modelIdToUse, prompt })
+            const { progressStream, outputs, stats } = diffusion({
+                modelId: modelIdToUse,
+                prompt,
+                steps: DIFFUSION.STEPS,
+                guidanceScale: DIFFUSION.GUIDANCE_SCALE
+            });
 
             // Stream progress steps
             for await (const { step, totalSteps } of progressStream) {
@@ -231,7 +238,7 @@ const handleCleanup = async (signal) => {
     console.log("Received signal:", signal);
 
 
-    await new Promise(resolve => server.close(resolve));
+    // await new Promise(resolve => server.close(resolve));
 
     const modelId = process.modelId || loadedModelId;
 
@@ -240,10 +247,10 @@ const handleCleanup = async (signal) => {
     if (modelId && modelId !== 'mock-model-id') {
         console.log(`\nUnloading model ID ${modelId} before closing server...`);
         try {
-            await unloadModel({ modelId, clearStorage: false });
+            await unloadModel({ modelId, clearStorage: true });
             console.log('Model unloaded successfully.');
         } catch (err) {
-            console.log(`Error in unloading model, err:`, err.message);
+            console.log("ErrName: " + err.name)
             if (err.name === 'MODEL_NOT_LOADED' || (err.message && err.message.includes('not loaded'))) {
                 console.log('Model was already unloaded.');
             } else {
@@ -259,5 +266,6 @@ const handleCleanup = async (signal) => {
 }
 
 // Register process exit listeners
-process.on('SIGINT', handleCleanup);
+// process.on('SIGINT', handleCleanup);
+process.once('SIGINT', () => handleCleanup("SIGINT"));
 process.on('SIGTERM', handleCleanup);

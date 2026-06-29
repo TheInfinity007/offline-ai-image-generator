@@ -6,3 +6,8 @@ export const EVENT = {
     PROGRESS: 'progress',
     SUCCESS: 'success'
 }
+
+export const DIFFUSION = {
+    STEPS: 60,
+    GUIDANCE_SCALE: 8.0
+}
