@@ -23,6 +23,13 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeGenerating = false;
     let modelLoaded = false;
 
+    // Dimensions Map
+    const dimensions = {
+        portrait: { width: '320px', height: '420px', label: 'Portrait (3:4)' },
+        inbetween: { width: '400px', height: '400px', label: 'Almost Square (1:1)' },
+        landscape: { width: '500px', height: '330px', label: 'Landscape (1.5:1)' }
+    };
+
     // Preset Cards Selection Logic
     const presetCards = document.querySelectorAll('.preset-card');
     presetCards.forEach(card => {
@@ -42,6 +49,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 promptInput.value = card.getAttribute('data-prompt');
                 // Clear validation styles
                 promptInput.classList.remove('border-destructive');
+            }
+        });
+    });
+
+    // Clear presets active state if the user types custom prompt
+    promptInput.addEventListener('input', () => {
+        presetCards.forEach(c => c.classList.remove('active-preset'));
+    });
+
+    // Handle preset size buttons click (pre-generation canvas resizing)
+    sizeBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (activeGenerating) return;
+
+            // Reset button classes
+            sizeBtns.forEach(b => {
+                b.classList.remove('border-primary', 'bg-primary/10', 'text-white');
+                b.classList.add('border-border', 'bg-secondary/40', 'text-neutral-400');
+            });
+
+            // Highlight selected button
+            btn.classList.add('border-primary', 'bg-primary/10', 'text-white');
+            btn.classList.remove('border-border', 'bg-secondary/40', 'text-neutral-400');
+
+            selectedRatio = btn.getAttribute('data-ratio');
+
+            // Update canvas wrapper dimensions and hint text
+            const { width, height, label } = dimensions[selectedRatio];
+            canvasWrapper.style.width = width;
+            canvasWrapper.style.height = height;
+            canvasAspectHint.textContent = label;
+
+            // Clear visual validation error highlight on selector container if any
+            const sizeContainer = document.getElementById('size-selector-container');
+            if (sizeContainer) {
+                sizeContainer.classList.remove('border-destructive', 'bg-destructive/5');
             }
         });
     });

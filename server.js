@@ -76,6 +76,7 @@ io.on('connection', (socket) => {
                     status: 'Model fully loaded locally.',
                     size: modelSize
                 });
+                console.log("Model already loaded");
                 return;
             } catch (err) {
                 console.log('Model ID was stale/not found, resetting state and reloading...', err.message);
@@ -149,7 +150,10 @@ server.listen(PORT, () => {
 })
 
 // Clean exit handler to unload the model when the server terminates
-const handleCleanup = async () => {
+const handleCleanup = async (signal) => {
+    console.log("Received signal:", signal);
+
+
     const modelId = process.modelId || loadedModelId;
 
     console.log(`Handle cleanUp called, modelId`, modelId);
@@ -168,6 +172,10 @@ const handleCleanup = async () => {
             }
         }
     }
+    console.log('Exiting')
+    setTimeout(() => {
+        console.log("Active Handles", process._getActiveHandles());
+    }, 1000);
     process.exit(0);
 }
 
